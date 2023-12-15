@@ -16,13 +16,13 @@ import (
 )
 
 // UE端 产生SUPI并处理得到SUCI，把SUCI以及SN_name发送给SN
-// 接收SEAF发送来的5G SE_AV，提取其中的各种值(randNum,AUTN),AUTN=xSQN^AK||amf||x_macA,处理后利用milenage算法计算得到macA
-// 比较两个mac值是否相同，若相同则生成Res，进一步生成Res*并将其发送给SEAF
+// 接收SN发送来的5G SE_AV，提取其中的各种值(randNum,AUTN),AUTN=xSQN^AK||amf||x_macA,处理后利用milenage算法计算得到macA
+// 比较两个mac值是否相同，若相同则生成Res，进一步生成Res*并将其发送给SN
 
 var (
-	hostSEAF = "localhost"
-	portSEAF = "8002"
-	portUE   = "8001"
+	hostSN = "localhost"
+	portSN = "8002"
+	portUE = "8001"
 )
 
 // GenerateSUPI Generate Subscription Permanent Identifier(SUPI).
@@ -162,7 +162,7 @@ func main() {
 	SUPI := GenerateSUPI()
 	SUCI := GenerateSUCI(SUPI)
 
-	SendData(SUCI+snName, hostSEAF, portSEAF)
+	SendData(SUCI+snName, hostSN, portSN)
 	_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send SUCI and SN_name to SEAF.")
 	fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send SUCI and SN_name to SEAF")
 
@@ -181,7 +181,7 @@ func main() {
 		L0 := fmt.Sprintf("%x", len(snName))
 		resStar := GenerateResStar(ck, ik, P0, L0, randNum, res)
 
-		SendData(resStar, hostSEAF, portSEAF)
+		SendData(resStar, hostSN, portSN)
 		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send res* to SEAF. Value:" + resStar)
 		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send res* to SEAF. Value:" + resStar)
 	}

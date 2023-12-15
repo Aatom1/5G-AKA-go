@@ -1,7 +1,8 @@
 package main
 
-// UDM端 接收AUSF发来的SUCI和SN_name，解密得到SUPI
-// 生成5G HE_AV并发送给AUSF端
+// HN端 接收SN发来的SUCI和SN_name，解密得到SUPI
+// 生成5G_AV并发送给SN端
+// 接收SN发送来的Res*并和xRes*比较，若相同则向SN返回认证成功
 
 import (
 	"_5gAKA_go"
@@ -16,9 +17,10 @@ import (
 )
 
 var (
-	hostAUSF = "localhost"
-	portAUSF = "8003"
-	portUDM  = "8004"
+	hostSN = "localhost"
+	portSN = "8002"
+	portHN  = "8003"
+	xResStar string
 )
 
 // GetSUPI Get SUPI by decrypting SUCI.
@@ -63,6 +65,17 @@ func GenerateXResStar(key, P0, L0, P1, L1, P2, L2 string) string {
 	tmp := hex.EncodeToString(h.Sum(nil))
 	xResStar := tmp[32:]
 	return xResStar
+}
+
+// GenerateHxResStar Generate hxRes* using xRes* by hash algorithm sha-256 after receiving HE_AV||SUPI from UDM.
+func GenerateHxResStar(randNum, xResStar string) string {
+	s := []byte(randNum + xResStar)
+	h := sha256.New()
+	h.Write(s)
+	tmp := hex.EncodeToString(h.Sum(nil))
+	hxResStar := tmp[32:]
+
+	return hxResStar
 }
 
 func SendData(data, host, port string) {
@@ -130,8 +143,8 @@ func InitForUDM() (string, string, string, string, string) {
 }
 
 func main() {
-	fmt.Println("UDM:")
-	file, _ := os.Create("UDM.log")
+	fmt.Println("HN:")
+	file, _ := os.Create("HN.log")
 	defer func(file *os.File) {
 		err := file.Close()
 		if err != nil {
@@ -139,9 +152,9 @@ func main() {
 		}
 	}(file)
 
-	data := ReceiveData(portUDM) // data = SUCI||SN_name
-	_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive SUCI and SN_name from AUSF.")
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive SUCI and SN_name from AUSF.")
+	data := ReceiveData(portHN) // data = SUCI||SN_name
+	_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive SUCI and SN_name from SN.")
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive SUCI and SN_name from SN.")
 
 	SUCI, snName := data[:21], data[21:]
 	SUPI := GetSUPI(SUCI)
@@ -163,12 +176,21 @@ func main() {
 	P2 := xRes
 	L2 := fmt.Sprintf("%x", len(P2))
 
-	xResStar := GenerateXResStar(key, P0, L0, P1, L1, P2, L2)
+	xResStar = GenerateXResStar(key, P0, L0, P1, L1, P2, L2)
+	hxResStar := GenerateHxResStar(randNum, xResStar)
 
-	heAV := randNum + AUTN + xResStar + kAusf
+	// heAV := randNum + AUTN + xResStar + kAusf	
+	seAV := randNum + AUTN + hxResStar + kAusf
 
-	SendData(heAV+SUPI, hostAUSF, portAUSF)
-	fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send 5G HE AV and SUPI to AUSF.")
-	_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send 5G HE AV and SUPI to AUSF.")
+	SendData(seAV+SUPI, hostSN, portSN)
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send 5G_AV and SUPI to SN.")
+	_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send 5G_AV and SUPI to SN.")
 
+	// 接收SN发送来的res*，并和xRes*比较，若相同则向SN返回"successful from HN"
+	resStar := ReceiveData(portHN)
+	fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive res* from SN.")
+	_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive res* from SN.")
+	if resStar == xResStar {
+		SendData("successful from HN", hostSN, portSN)
+	}
 }

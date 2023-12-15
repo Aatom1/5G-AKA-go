@@ -9,19 +9,20 @@ import (
 	"time"
 )
 
-// SEAF端 监听SEAF对应端口，根据收到的不同信息做出不同处理
+// SN端 监听SN对应端口，根据收到的不同信息做出不同处理
 // 接收UE发送的SUCI+SN_name,并转发给AUSF
-// 从AUSF端接收SE_AV(randNum||AUTN||hxResStar||kSeaf)
+// 从HN端接收SE_AV(randNum||AUTN||hxResStar||kSeaf)
 // 向UE端发送randNum||AUTN
 // 从UE端接收Res*，并产生哈希值hRes*
-// 验证计算的hRes*和从AUSF端接收处理得到的hxRes*是否相同，若相同，把Res*发送给AUSF
+// 验证计算的hRes*和从HN端接收处理得到的hxRes*是否相同，若相同，把Res*发送给HN
+// 根据HN返回的响应判断是否认证成功。
 
 var (
 	hostUE    = "localhost"
-	hostAUSF  = "localhost"
+	hostHN  = "localhost"
 	portUE    = "8001"
-	portSEAF  = "8002"
-	portAUSF  = "8003"
+	portSN  = "8002"
+	portHN  = "8003"
 	randNum   string
 	hxResStar string
 	kSeaf     string
@@ -111,7 +112,7 @@ func handleConnection(conn net.Conn) {
 	//fmt.Println("Received:", receivedData)
 
 	// 根据消息长度做出不同反应
-	file, _ := os.Create("SEAF.log")
+	file, _ := os.Create("SN.log")
 	defer func(file *os.File) {
 		err := file.Close()
 		if err != nil {
@@ -122,13 +123,13 @@ func handleConnection(conn net.Conn) {
 	if length == 30 {
 		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive SUCI and snName from UE.")
 		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive SUCI and snName from UE.")
-		SendData(receivedData, hostAUSF, portAUSF)
-		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send SUCI and snName to AUSF.")
-		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send SUCI and snName to AUSF.")
+		SendData(receivedData, hostHN, portHN)
+		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send SUCI and snName to HN.")
+		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send SUCI and snName to HN.")
 	} else if length >= 160 {
 		AV := receivedData
-		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive 5G_SE_AV and SUPI from AUSF.")
-		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive 5G_SE_AV and SUPI from AUSF.")
+		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive 5G_AV and SUPI from HN.")
+		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive 5G_AV and SUPI from HN.")
 		_, AUTN, _, _ := ResolveAV(AV)
 		randNum, _, _, _ = ResolveAV(AV)
 		_, _, hxResStar, kSeaf = ResolveAV(AV)
@@ -145,20 +146,20 @@ func handleConnection(conn net.Conn) {
 
 		// Judge
 		if hResStar == hxResStar {
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "SEAF Authentication Passed.")
-			_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "SEAF Authentication Passed.")
-			SendData(resStar, hostAUSF, portAUSF)
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send res* to AUSF.")
-			_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send res* to AUSF.")
+			fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "SN Authentication Passed.")
+			_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "SN Authentication Passed.")
+			SendData(resStar, hostHN, portHN)
+			fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send res* to HN.")
+			_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Send res* to HN.")
 		} else {
-			fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "SEAF Authentication Failed!")
-			_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "SEAF Authentication Failed!")
+			fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "SN Authentication Failed!")
+			_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "SN Authentication Failed!")
 		}
 	} else if length == 48 {
 
-	} else if receivedData == "successful from AUSF" {
-		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive authentication response from AUSF. AKA Successful!")
-		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive authentication response from AUSF.\n AKA Successful!")
+	} else if receivedData == "successful from HN" {
+		fmt.Println(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive authentication response from HN. AKA Successful!")
+		_, _ = file.WriteString(time.Now().Format("2006-01-02 15:04:05") + "  " + "Receive authentication response from HN. AKA Successful!")
 	}
 
 	err = conn.Close()
@@ -169,7 +170,7 @@ func handleConnection(conn net.Conn) {
 }
 
 func main() {
-	//	监听SEAF对应端口，根据监听到的消息长度做出不同反应
-	fmt.Println("SEAF:")
-	ReceiveData(portSEAF)
+	//	监听SN对应端口，根据监听到的消息长度做出不同反应
+	fmt.Println("SN:")
+	ReceiveData(portSN)
 }
